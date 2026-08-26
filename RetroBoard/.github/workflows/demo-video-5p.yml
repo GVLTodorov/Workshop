@@ -53,6 +53,9 @@ jobs:
       - name: Record demo
         id: record
         run: |
+          # `| tee` alone would let this step report success even if the Playwright run crashes -- a
+          # pipe's exit status is its last command's (tee, which always succeeds), not the demo's.
+          set -o pipefail
           mkdir -p artifacts/demo-video
           dotnet run --project src/RetroBoard.Tests.Play -c Release --no-build -- \
             http://localhost:6233 artifacts/demo-video | tee artifacts/demo-video.log
