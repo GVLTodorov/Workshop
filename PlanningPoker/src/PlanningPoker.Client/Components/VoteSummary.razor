@@ -1,0 +1,61 @@
+﻿@if (Voters.Count > 0)
+{
+    <div class="vote-summary @AccentClass">
+        <div class="vote-summary-groups">
+            @foreach (var group in VoteGroups)
+            {
+                <div class="vote-summary-group @(group.Count == MaxVoteCount ? "vote-summary-group-leading" : "")">
+                    <span class="vote-summary-card">@group.Label</span>
+                    <span class="vote-summary-count">@group.Count @(group.Count == 1 ? "Vote" : "Votes")</span>
+                </div>
+            }
+        </div>
+
+        <div class="vote-summary-divider"></div>
+
+        <div class="vote-summary-stats">
+            <div class="vote-summary-stat">
+                <span class="vote-summary-stat-value">@Average.ToString("0.##")</span>
+                <span class="vote-summary-stat-label">Average</span>
+            </div>
+            <div class="vote-summary-stat">
+                <span class="vote-summary-stat-value @AgreementClass">@($"{Math.Round(Agreement * 100)}%")</span>
+                <span class="vote-summary-stat-label">Agreement</span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public IReadOnlyList<PlayerResponse> Players { get; set; } = [];
+
+    private List<PlayerResponse> Voters =>
+        Players.Where(p => !p.IsSpectator && p.Card is not null).ToList();
+
+    private List<VoteGroup> VoteGroups =>
+        Voters
+            .GroupBy(p => p.Card!.Value)
+            .OrderByDescending(g => g.Key)
+            .Select(g => new VoteGroup(g.First().Card!.Label, g.Count()))
+            .ToList();
+
+    private double Average => Voters.Count > 0 ? Voters.Average(p => p.Card!.Value) : 0;
+
+    private int MaxVoteCount => VoteGroups.Count > 0 ? VoteGroups.Max(g => g.Count) : 0;
+
+    private double Agreement => Voters.Count > 0 ? MaxVoteCount / (double)Voters.Count : 0;
+
+    private string AgreementClass => Agreement switch
+    {
+        < 0.5 => "vote-summary-agreement-low",
+        < 0.7 => "vote-summary-agreement-medium",
+        _ => "vote-summary-agreement-high",
+    };
+
+    // Drives the panel's top accent bar so the reveal reads as "strong/weak consensus" at a glance,
+    // mirroring the agreement stat's color without duplicating its threshold logic.
+    private string AccentClass => AgreementClass.Replace("vote-summary-agreement-", "vote-summary-accent-");
+
+    private sealed record VoteGroup(string Label, int Count);
+}

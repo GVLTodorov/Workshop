@@ -1,0 +1,114 @@
+﻿@page "/"
+@inject RoomApiClient RoomApi
+@inject PlayerSessionState Session
+@inject NavigationManager Navigation
+
+<section class="screen create-screen">
+    <div class="page-title">
+        <a href="/" class="home-link" aria-label="Back to home">
+            <img src="favicon.svg" alt="" class="home-icon" />
+        </a>
+        <h1>Planning Poker</h1>
+    </div>
+    <p class="tagline">Estimate together, in real time.</p>
+
+    @if (WasRemoved)
+    {
+        <p class="form-error" role="alert">You were removed from the room by the host.</p>
+    }
+
+    <form class="stack-form" @onsubmit="CreateRoomAsync">
+        <label class="field">
+            <span class="field-label">Room name</span>
+            <input class="text-input" type="text" maxlength="60" required
+                   value="@_roomName" @oninput="@(e => _roomName = (string?)e.Value ?? string.Empty)" />
+        </label>
+
+        <PlayerSetupForm Name="@_playerName" NameChanged="@(v => _playerName = v)"
+                          AvatarUrls="_avatarUrls" AvatarUrl="@_avatarUrl" AvatarUrlChanged="@(v => _avatarUrl = v)"
+                          IsRefreshingAvatars="_isRefreshingAvatars" RefreshAvatars="RefreshAvatarsAsync"
+                          IsSpectator="_isSpectator" IsSpectatorChanged="@(v => _isSpectator = v)" />
+
+        <DeckPicker Decks="_decks" SelectedDeckType="_deckType" SelectedDeckTypeChanged="@(v => _deckType = v)" />
+
+        <label class="field checkbox-field">
+            <input type="checkbox" checked disabled />
+            <span>Host (you'll be the only one who can reveal cards)</span>
+        </label>
+
+        @if (!string.IsNullOrEmpty(_error))
+        {
+            <p class="form-error" role="alert">@_error</p>
+        }
+
+        <button type="submit" class="primary-button" disabled="@_isCreating">
+            @(_isCreating ? "Creating…" : "Create Room")
+        </button>
+    </form>
+</section>
+
+@code {
+    [SupplyParameterFromQuery(Name = "removed")]
+    public bool WasRemoved { get; set; }
+
+    private string _roomName = string.Empty;
+    private string _playerName = string.Empty;
+    private string? _avatarUrl;
+    private IReadOnlyList<string> _avatarUrls = [];
+    private IReadOnlyList<DeckResponse> _decks = [];
+    private DeckType _deckType = DeckType.Fibonacci;
+    private bool _isSpectator;
+    private bool _isCreating;
+    private bool _isRefreshingAvatars;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var nameTask = RoomApi.GetRoomNameSuggestionAsync();
+        var decksTask = RoomApi.GetDecksAsync();
+        var avatarsTask = RoomApi.GetRandomAvatarsAsync(5);
+
+        await Task.WhenAll(nameTask, decksTask, avatarsTask);
+
+        _roomName = await nameTask;
+        _decks = await decksTask;
+        _avatarUrls = await avatarsTask;
+        _avatarUrl = _avatarUrls.Count > 0 ? _avatarUrls[0] : null;
+    }
+
+    private async Task RefreshAvatarsAsync()
+    {
+        _isRefreshingAvatars = true;
+        _avatarUrls = await RoomApi.GetRandomAvatarsAsync(5);
+        _avatarUrl = _avatarUrls.Count > 0 ? _avatarUrls[0] : null;
+        _isRefreshingAvatars = false;
+    }
+
+    private async Task CreateRoomAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_roomName) || string.IsNullOrWhiteSpace(_playerName))
+        {
+            _error = "Please enter a room name and your name.";
+            return;
+        }
+
+        _isCreating = true;
+        _error = null;
+
+        var room = await RoomApi.CreateRoomAsync(_roomName.Trim(), _deckType);
+        if (room is null)
+        {
+            _error = "That room name is already taken, or has no usable characters for a room link. We've suggested a different one below — try again.";
+            _roomName = await RoomApi.GetRoomNameSuggestionAsync();
+            _isCreating = false;
+            return;
+        }
+
+        Session.PlayerName = _playerName.Trim();
+        Session.AvatarUrl = _avatarUrl;
+        Session.IsSpectator = _isSpectator;
+        await Session.SaveAsync();
+
+        Navigation.NavigateTo($"/{room.RoomId}");
+    }
+}
