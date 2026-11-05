@@ -40,7 +40,8 @@ game state over SignalR or raw WebSockets.
 - Lives in the [Workshop](../README.md) monorepo: [planningpoker-ci.yml](../.github/workflows/planningpoker-ci.yml)
   runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `PlanningPoker/`
   or those two workflow files change. Versions are independent `PlanningPoker-vX.Y.Z` git tags; the
-  image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus `latest` on `main`.
+  image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus `latest` on `main`. A release can
+  also be started by hand with **Run workflow** on `planningpoker-ci.yml`, on `main` or `beta`.
 
 ## 4. Deployment
 
