@@ -1,0 +1,70 @@
+﻿@inject IJSRuntime JsRuntime
+
+<div class="player-card-wrapper @(Player.IsSpectator ? "player-card-spectator" : "")">
+    <span class="player-card-name">@Player.Name</span>
+
+    <div class="player-card @(IsLocalPlayer ? "player-card-local" : "")">
+        @if (!string.IsNullOrEmpty(Player.AvatarUrl))
+        {
+            <div class="player-card-background" style="background-image:url('@Player.AvatarUrl')"></div>
+        }
+
+        @if (CanRemove)
+        {
+            <button type="button" class="player-card-remove" aria-label="Remove @Player.Name" @onclick="ConfirmAndRemoveAsync">
+                &times;
+            </button>
+        }
+
+        <div class="player-card-content">
+            @if (Player.IsSpectator)
+            {
+                <span class="player-card-badge">Spectator</span>
+            }
+            else if (Player.Card is not null)
+            {
+                <span class="player-card-value">@Player.Card.Label</span>
+            }
+            else if (Player.HasPicked)
+            {
+                <span class="player-card-picked" aria-label="Picked a card">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"
+                         aria-hidden="true">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </span>
+            }
+            else
+            {
+                <span class="player-card-waiting" aria-label="Waiting for a pick"></span>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public PlayerResponse Player { get; set; } = null!;
+
+    [Parameter]
+    public bool IsLocalPlayer { get; set; }
+
+    [Parameter]
+    public bool CanRemove { get; set; }
+
+    [Parameter]
+    public EventCallback OnRemove { get; set; }
+
+    private IJSObjectReference? _jsModule;
+
+    private async Task ConfirmAndRemoveAsync()
+    {
+        _jsModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/interop.js");
+        var confirmed = await _jsModule.InvokeAsync<bool>("confirmAction", $"Remove {Player.Name} from the room?");
+        if (confirmed)
+        {
+            await OnRemove.InvokeAsync();
+        }
+    }
+}

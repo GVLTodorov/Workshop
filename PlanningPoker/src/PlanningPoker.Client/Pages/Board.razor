@@ -1,0 +1,314 @@
+﻿@page "/{RoomId}"
+@implements IAsyncDisposable
+@using Microsoft.AspNetCore.SignalR
+@inject PlayerSessionState Session
+@inject NavigationManager Navigation
+@inject RoomApiClient RoomApi
+@inject IJSRuntime JsRuntime
+@inject IGameHubClientFactory HubFactory
+
+<section class="screen board-screen">
+    @if (_notFound)
+    {
+        <h1>Room not found</h1>
+        <p>This room may have ended. Double-check the link, or start a new one.</p>
+        <a class="primary-button" href="/">Create a new room</a>
+    }
+    else if (_state is null)
+    {
+        <p>Connecting…</p>
+    }
+    else
+    {
+        <header class="board-header">
+            <div class="page-title">
+                <a href="/" class="home-link" aria-label="Back to home">
+                    <img src="favicon.svg" alt="" class="home-icon" />
+                </a>
+                <h1>@_state.Name</h1>
+                <button type="button" class="copy-link-button" @onclick="CopyInviteLinkAsync"
+                        title="@(_linkCopied ? "Link copied!" : "Copy invite link")"
+                        aria-label="@(_linkCopied ? "Link copied!" : "Copy invite link")">
+                    @if (_linkCopied)
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <polyline points="20 6 9 17 4 12"></polyline>
+                        </svg>
+                    }
+                    else
+                    {
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                             stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                             aria-hidden="true">
+                            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                        </svg>
+                    }
+                </button>
+            </div>
+        </header>
+
+        <div class="field">
+            <span class="field-label">Deck</span>
+            <p class="deck-readonly">@CurrentDeckSummary</p>
+        </div>
+
+        <PlayerList Players="_state.Players" LocalPlayerId="_playerId" IsHost="IsHost" OnRemovePlayer="RemovePlayerAsync" />
+
+        @* Both panels stay mounted, stacked in the same grid cell, so whichever is taller sets the
+           row height regardless of which one is visible -- the reveal button below never jumps. *@
+        <div class="board-main-panel">
+            <div class="board-main-panel-layer @(_state.Status != RoundStatus.Revealed ? "" : "board-main-panel-hidden")">
+                <HandSelector Deck="CurrentDeck" SelectedCardIndex="_myCardIndex" Disabled="@Session.IsSpectator"
+                              SelectedCardIndexChanged="PickCardAsync" />
+            </div>
+            <div class="board-main-panel-layer @(_state.Status == RoundStatus.Revealed ? "" : "board-main-panel-hidden")">
+                <VoteSummary Players="_state.Players" />
+            </div>
+        </div>
+
+        <RevealResetButton Status="_state.Status" CanReveal="CanReveal" IsHost="IsHost" OnReveal="RevealAsync"
+                           OnReset="ResetAsync" />
+    }
+</section>
+
+@code {
+    [Parameter]
+    public string RoomId { get; set; } = string.Empty;
+
+    private IGameHubClient? _hub;
+    private RoomStateResponse? _state;
+    private bool _notFound;
+    private Guid _playerId;
+    private IReadOnlyList<DeckResponse> _decks = [];
+    private bool _linkCopied;
+    private int _linkCopyRequestId;
+    private bool _disposed;
+    private int? _myCardIndex;
+    private IJSObjectReference? _jsModule;
+
+    private IReadOnlyList<CardOptionResponse> CurrentDeck =>
+        _decks.FirstOrDefault(d => d.DeckType == _state?.DeckType)?.Cards ?? [];
+
+    private string CurrentDeckSummary =>
+        _decks.FirstOrDefault(d => d.DeckType == _state?.DeckType) is { } deck
+            ? $"{deck.DisplayName} ({string.Join(", ", deck.Cards.Select(c => c.Label))})"
+            : string.Empty;
+
+    private bool IsHost => _state?.Players.FirstOrDefault(p => p.PlayerId == _playerId)?.IsHost ?? false;
+
+    private bool CanReveal =>
+        IsHost &&
+        _state is { Status: RoundStatus.Voting } state &&
+        state.Players.Where(p => !p.IsSpectator).ToList() is { Count: > 0 } activePlayers &&
+        activePlayers.All(p => p.HasPicked);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.RestoreAsync();
+
+        if (string.IsNullOrWhiteSpace(Session.PlayerName))
+        {
+            Navigation.NavigateTo($"/{RoomId}/join");
+            return;
+        }
+
+        _decks = await RoomApi.GetDecksAsync();
+
+        _hub = HubFactory.Create();
+        _hub.RoomStateChanged += OnRoomStateChanged;
+        _hub.PlayerPickChanged += OnPlayerPickChanged;
+        _hub.RoundRevealed += OnRoundRevealed;
+        _hub.RoundReset += OnRoundReset;
+        _hub.RemovedFromRoom += OnRemovedFromRoom;
+        _hub.Reconnected += OnReconnected;
+
+        await _hub.StartAsync();
+
+        // If we already joined this exact room before (a refresh, not a fresh visit), pass that
+        // player id along so the server reclaims the same identity -- host status, current pick,
+        // everything -- instead of us reappearing as a brand new joiner. See GameHub.JoinRoom.
+        var existingPlayerId = Session.RoomId == RoomId ? Session.PlayerId : null;
+
+        JoinRoomResponse result;
+        try
+        {
+            result = await _hub.JoinRoomAsync(
+                RoomId, Session.PlayerName, Session.IsSpectator, Session.AvatarUrl, existingPlayerId);
+        }
+        catch (HubException)
+        {
+            // Most likely a link to a room that has since ended -- rooms live in memory only, so an
+            // old link outlives a server restart or the room's natural cleanup after it emptied out.
+            _notFound = true;
+            return;
+        }
+
+        _playerId = result.PlayerId;
+        _state = result.State;
+
+        Session.RoomId = RoomId;
+        Session.PlayerId = _playerId;
+        await Session.SaveAsync();
+    }
+
+    private void OnRoomStateChanged(RoomStateResponse state)
+    {
+        _state = state;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnPlayerPickChanged(PlayerPickStatusChanged change)
+    {
+        if (_state is null)
+        {
+            return;
+        }
+
+        _state = _state with
+        {
+            Players = _state.Players
+                .Select(p => p.PlayerId == change.PlayerId ? p with { HasPicked = change.HasPicked } : p)
+                .ToList(),
+        };
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRoundRevealed(RoundRevealed revealed)
+    {
+        if (_state is null)
+        {
+            return;
+        }
+
+        _state = _state with { Status = RoundStatus.Revealed, Players = revealed.Players.ToList() };
+
+        if (IsUnanimous(_state.Players))
+        {
+            InvokeAsync(CelebrateConsensusAsync);
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private static bool IsUnanimous(IReadOnlyList<PlayerResponse> players)
+    {
+        var votes = players.Where(p => !p.IsSpectator && p.Card is not null).Select(p => p.Card!.Value).Distinct().ToList();
+        return votes.Count == 1;
+    }
+
+    private async Task CelebrateConsensusAsync()
+    {
+        _jsModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/interop.js");
+        await _jsModule.InvokeVoidAsync("celebrateConsensus");
+    }
+
+    private void OnRoundReset()
+    {
+        if (_state is null)
+        {
+            return;
+        }
+
+        _state = _state with
+        {
+            Status = RoundStatus.Voting,
+            Players = _state.Players.Select(p => p with { HasPicked = false, Card = null }).ToList(),
+        };
+        _myCardIndex = null;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnRemovedFromRoom()
+    {
+        Session.PlayerName = string.Empty;
+        Session.AvatarUrl = null;
+        Session.RoomId = null;
+        Session.PlayerId = null;
+        InvokeAsync(async () =>
+        {
+            await Session.SaveAsync();
+            Navigation.NavigateTo("/?removed=true");
+        });
+    }
+
+    private void OnReconnected()
+    {
+        InvokeAsync(async () =>
+        {
+            if (_hub is null)
+            {
+                return;
+            }
+
+            // Reclaims this player id server-side (see GameHub.JoinRoom) so the hub methods this
+            // page still calls -- PickCard, Reveal, etc. -- work again after the transport's own
+            // automatic reconnect landed us on a new, untracked ConnectionId. Also refreshes _state
+            // in case anything changed in the room while we were disconnected.
+            var result = await _hub.JoinRoomAsync(
+                RoomId, Session.PlayerName, Session.IsSpectator, Session.AvatarUrl, _playerId);
+            _state = result.State;
+            StateHasChanged();
+        });
+    }
+
+    private async Task PickCardAsync(int? cardIndex)
+    {
+        _myCardIndex = cardIndex;
+        if (_hub is not null)
+        {
+            await _hub.PickCardAsync(cardIndex);
+        }
+    }
+
+    private Task RevealAsync() => _hub?.RevealAsync() ?? Task.CompletedTask;
+
+    private Task ResetAsync() => _hub?.ResetAsync() ?? Task.CompletedTask;
+
+    private Task RemovePlayerAsync(Guid targetPlayerId) => _hub?.RemovePlayerAsync(targetPlayerId) ?? Task.CompletedTask;
+
+    private async Task CopyInviteLinkAsync()
+    {
+        _jsModule ??= await JsRuntime.InvokeAsync<IJSObjectReference>("import", "./js/interop.js");
+        var url = Navigation.ToAbsoluteUri($"/{RoomId}").ToString();
+        await _jsModule.InvokeVoidAsync("copyToClipboard", url);
+
+        var requestId = ++_linkCopyRequestId;
+        _linkCopied = true;
+        StateHasChanged();
+
+        await Task.Delay(Constants.LinkCopiedIndicatorDurationMs);
+
+        // Skip if a later click already started its own reset countdown, or the component was
+        // torn down while we were waiting -- calling StateHasChanged() after disposal throws.
+        if (!_disposed && requestId == _linkCopyRequestId)
+        {
+            _linkCopied = false;
+            StateHasChanged();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+
+        if (_hub is not null)
+        {
+            _hub.RoomStateChanged -= OnRoomStateChanged;
+            _hub.PlayerPickChanged -= OnPlayerPickChanged;
+            _hub.RoundRevealed -= OnRoundRevealed;
+            _hub.RoundReset -= OnRoundReset;
+            _hub.RemovedFromRoom -= OnRemovedFromRoom;
+            _hub.Reconnected -= OnReconnected;
+            await _hub.DisposeAsync();
+        }
+
+        if (_jsModule is not null)
+        {
+            await _jsModule.DisposeAsync();
+        }
+    }
+}

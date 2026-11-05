@@ -1,0 +1,120 @@
+using System.Text.Json;
+using System.Text.Json.Serialization.Metadata;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.SignalR;
+using PlanningPoker.Api.Endpoints;
+using PlanningPoker.Api.Giphy;
+using PlanningPoker.Api.Hubs;
+using PlanningPoker.Api.Services;
+using PlanningPoker.Contracts.Serialization;
+using PlanningPoker.Domain.Rooms;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Gitignored, machine-local overrides (e.g. a real Giphy API key for debugging)
+// layered on top of the tracked appsettings.*.json files — never committed.
+builder.Configuration.AddJsonFile("appsettings.Local.json", optional: true, reloadOnChange: true);
+
+var giphyOptions = new GiphyOptions
+{
+    BaseUrl = builder.Configuration["GIPHY_API_BASE_URL"],
+    Query = builder.Configuration["GIPHY_API_QUERY"],
+};
+builder.Services.AddSingleton(giphyOptions);
+builder.Services.AddMemoryCache();
+
+if (giphyOptions.IsConfigured)
+{
+    builder.Services.AddHttpClient<IGiphyClient, GiphyClient>();
+}
+else
+{
+    builder.Services.AddSingleton<IGiphyClient, NullGiphyClient>();
+}
+
+builder.Services.AddSingleton<IRoomRepository, InMemoryRoomRepository>();
+builder.Services.AddSingleton<IPlayerTracker, PlayerTracker>();
+
+builder.Services
+    .AddSignalR(options => options.AddFilter<ExceptionHubFilter>())
+    .AddJsonProtocol(options => options.PayloadSerializerOptions = PlanningPokerJsonContext.CreateOptions());
+
+builder.Services.ConfigureHttpJsonOptions(options =>
+{
+    options.SerializerOptions.TypeInfoResolverChain.Insert(0, PlanningPokerJsonContext.Default);
+    options.SerializerOptions.TypeInfoResolverChain.Add(new DefaultJsonTypeInfoResolver());
+    options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
+});
+
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+});
+
+var app = builder.Build();
+
+app.UseResponseCompression();
+
+if (app.Environment.IsDevelopment())
+{
+    // An F5/`dotnet run` debug session should never show stale bytes after a rebuild.
+    // app.css, index.html, and the Blazor boot manifest have no cache-busting fingerprint of their
+    // own, so the browser's default heuristic caching (no explicit Cache-Control -> guess a
+    // freshness lifetime from Last-Modified) can and does serve an old copy across an
+    // edit-rebuild-refresh cycle -- exactly what was happening. Blanket no-cache sidesteps that
+    // entirely for every response while debugging; production keeps the long-cache-for-hashed-files
+    // strategy below untouched.
+    app.Use((context, next) =>
+    {
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers.CacheControl = "no-cache, no-store, must-revalidate";
+            context.Response.Headers.Pragma = "no-cache";
+            context.Response.Headers.Expires = "0";
+            return Task.CompletedTask;
+        });
+
+        return next();
+    });
+}
+else
+{
+    // Most _framework/* filenames are content-hashed by the Blazor build, so they can be cached
+    // indefinitely -- except the two loader scripts (blazor.webassembly.js, dotnet.js), which keep
+    // their fixed names (see PlanningPoker.Client.csproj's OverrideHtmlAssetPlaceholders comment) and
+    // so must NOT be cached forever, or a returning visitor could run a stale loader against a new
+    // deploy's fingerprinted assembly set. Everything outside _framework/ (index.html, css, ...) keeps
+    // the framework's own short/no-cache default. Set from OnStarting (not inline here) because the
+    // static file middleware downstream sets its own Cache-Control just before writing the response --
+    // setting it earlier in the pipeline would just get overwritten.
+    string[] unfingerprintedFrameworkFiles = ["/_framework/blazor.webassembly.js", "/_framework/dotnet.js"];
+    app.Use((context, next) =>
+    {
+        if (context.Request.Path.StartsWithSegments("/_framework") &&
+            !unfingerprintedFrameworkFiles.Contains(context.Request.Path.Value, StringComparer.OrdinalIgnoreCase))
+        {
+            context.Response.OnStarting(() =>
+            {
+                context.Response.Headers.CacheControl = "public, max-age=31536000, immutable";
+                return Task.CompletedTask;
+            });
+        }
+
+        return next();
+    });
+}
+
+app.UseBlazorFrameworkFiles();
+app.UseStaticFiles();
+
+app.MapRoomEndpoints();
+app.MapHub<GameHub>("/hubs/game");
+app.MapFallbackToFile("index.html");
+
+app.Run();
+
+public partial class Program
+{
+}
