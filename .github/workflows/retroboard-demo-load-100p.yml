@@ -1,10 +1,10 @@
-name: Demo Load (100 Boards x 5 Participants, Resource Usage)
+name: RetroBoard Demo Load (100 Boards x 5 Participants, Resource Usage)
 
 # Manual only: drives N boards x M participants (real SignalR connections, no browsers) against a
 # live instance, has every participant write K cards, then exports every board as its facilitator
 # -- while sampling RetroBoard.Api's own CPU/memory throughout and drawing the series as an SVG
 # chart -- purely to see what RetroBoard.Api itself costs (and whether it still behaves correctly)
-# under sustained concurrent load. Not gated into ci.yml, same non-gating treatment PlanningPoker
+# under sustained concurrent load. Not gated into retroboard-ci.yml, same non-gating treatment PlanningPoker
 # gives this class of test (REQUIREMENTS.MD Section 9's load/soak-test bullet): scale like this
 # isn't meant to block every push/PR, only to be run on demand from the Actions tab.
 #
@@ -44,6 +44,10 @@ on:
         type: string
         default: "3"
 
+defaults:
+  run:
+    working-directory: RetroBoard
+
 jobs:
   load-100p:
     runs-on: ubuntu-latest
@@ -56,7 +60,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          global-json-file: RetroBoard/global.json
 
       - name: Build
         run: dotnet build RetroBoard.slnx -c Release
@@ -73,12 +77,12 @@ jobs:
         env:
           ASPNETCORE_URLS: http://localhost:6233
         run: |
-          # ContentRootPath defaults to the process's working directory (the repo root here), not
-          # the published DLL's own folder, so WebRootPath resolves to <repo root>/wwwroot (doesn't
+          # ContentRootPath defaults to the process's working directory (this project's folder here), not
+          # the published DLL's own folder, so WebRootPath resolves to <project folder>/wwwroot (doesn't
           # exist) unless --contentRoot is given explicitly. It must be absolute: a relative value
           # gets resolved against the DLL's base directory, not this shell's cwd, and silently
           # doubles the path.
-          dotnet publish/api/RetroBoard.Api.dll --contentRoot "$GITHUB_WORKSPACE/publish/api" > api.log 2>&1 &
+          dotnet publish/api/RetroBoard.Api.dll --contentRoot "$GITHUB_WORKSPACE/RetroBoard/publish/api" > api.log 2>&1 &
           echo $! > api.pid
           timeout 30 bash -c 'until curl -sf http://localhost:6233/healthz >/dev/null; do sleep 1; done'
 

@@ -5,7 +5,7 @@
 
   <em>Real-time, self-hosted sprint retrospective board.</em>
 
-  [![CI](https://github.com/GVLTodorov/RetroBoard/actions/workflows/ci.yml/badge.svg)](https://github.com/GVLTodorov/RetroBoard/actions/workflows/ci.yml)
+  [![CI](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml)
   ![Line coverage](badges/line_coverage.svg)
   ![Branch coverage](badges/branch_coverage.svg)
 
@@ -31,7 +31,7 @@ A single-container web app for running sprint retrospectives: create a board, sh
 sticky notes to columns, optionally keep them blurred until revealed, dot-vote on what matters
 most, group similar ideas together, and walk away with a tracked action-item list — all over a
 real-time connection, no sign-up required. It's a sibling project to
-[GVLTodorov/PlanningPoker](https://github.com/GVLTodorov/PlanningPoker) (same author, same "small
+[PlanningPoker](../PlanningPoker) (same author, same "small
 self-hosted agile-ceremony tool" shape), reusing that project's stack and conventions. See
 [REQUIREMENTS.MD](REQUIREMENTS.MD) for the full spec this was built against.
 
@@ -95,7 +95,7 @@ creation/lookup, template metadata, and the Markdown export.
 
 ## Project structure
 
-The solution ([RetroBoard.slnx](RetroBoard.slnx)) sits at the repo root; every project lives under
+The solution ([RetroBoard.slnx](RetroBoard.slnx)) sits at the root of this folder; every project lives under
 `src/`, one folder per project, split along dependency lines:
 
 ```
@@ -130,7 +130,7 @@ server-side validation logic.
 dotnet test RetroBoard.slnx
 ```
 
-Runs the unit, component, and integration suites together. The [CI workflow](.github/workflows/ci.yml)
+Runs the unit, component, and integration suites together. The [CI workflow](../.github/workflows/retroboard-ci.yml)
 runs the same command on every push/PR and gates the version-bump/image-build/push job on it
 passing. It also collects code coverage and publishes an HTML report (the `coverage-report`
 artifact) plus a summary in the job summary — informational only, not gated on a threshold.
@@ -148,16 +148,16 @@ three tests alone take about a minute; everything else in the suite is fast.
 Three manual, non-gated tools round out the suite (not run by `dotnet test`, triggered from the
 Actions tab), plus an orchestrator that runs all three back-to-back:
 
-- [Demo Video workflow](.github/workflows/demo-video-5p.yml) runs `RetroBoard.Tests.Play`, which
+- [Demo Video workflow](../.github/workflows/retroboard-demo-video-5p.yml) runs `RetroBoard.Tests.Play`, which
   drives 5 real headless-Chromium sessions through the actual UI (join → write → reveal → vote →
   advance to action items → convert) and commits the regenerated `docs/demo.gif`.
-- [Demo Video (12 Participants) workflow](.github/workflows/demo-video-12p.yml) runs the same flow
+- [Demo Video (12 Participants) workflow](../.github/workflows/retroboard-demo-video-12p.yml) runs the same flow
   at `RetroBoard.Tests.Play.Twelve`, scaled to 12 participants, and commits `docs/twelve.gif`.
-- [Demo Load workflow](.github/workflows/demo-load-100p.yml) runs `RetroBoard.Tests.LoadTest`
+- [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml) runs `RetroBoard.Tests.LoadTest`
   (100 boards x 5 participants x 3 cards each by default — configurable via workflow inputs —
   then an export per board), reports `AddCard`/export latency percentiles to the job summary, and
   commits the regenerated resource-usage chart (see [Performance](#performance) below).
-- [Demo All workflow](.github/workflows/demo-all.yml) runs the three workflows above sequentially
+- [Demo All workflow](../.github/workflows/retroboard-demo-all.yml) runs the three workflows above sequentially
   in one Actions run (`needs:`-chained so their commits to `main` don't race).
 
 ## Performance
@@ -167,7 +167,7 @@ Actions tab), plus an orchestrator that runs all three back-to-back:
 While `RetroBoard.Tests.LoadTest` drives its boards and participants (see above), it also samples
 `RetroBoard.Api`'s own CPU% and working-set memory at a fixed interval and renders the series as
 an SVG chart — purely to see what the app costs under sustained concurrent load, on top of the
-latency numbers it already reports. Trigger the [Demo Load workflow](.github/workflows/demo-load-100p.yml)
+latency numbers it already reports. Trigger the [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml)
 from the Actions tab to regenerate and commit the chart above, or run it manually against a live
 instance:
 
@@ -179,4 +179,4 @@ dotnet run --project src/RetroBoard.Tests.LoadTest -- http://localhost:6233 <api
 
 None required. RetroBoard has no external integrations (unlike PlanningPoker's optional Giphy
 avatars) — every feature works with zero environment variables set. [docker-compose.yml](docker-compose.yml)
-at the repo root is the minimal, portable example — build locally, no reverse proxy required.
+in this folder is the minimal, portable example — build locally, no reverse proxy required.

@@ -1,12 +1,16 @@
-name: Demo Load (100 Players, Resource Usage)
+name: PlanningPoker Demo Load (100 Players, Resource Usage)
 
 # Manual only: this drives 10 rooms x 10 players (100 real SignalR connections, no browsers) against
 # a live instance purely to see what PlanningPoker.Api itself costs in CPU/memory under sustained
 # concurrent load -- it produces a chart, not a recording, so it's kept separate from
-# demo-video-5p.yml/demo-video-12p.yml (those need a Giphy key and a browser; this needs neither).
+# planningpoker-demo-video-5p.yml/planningpoker-demo-video-12p.yml (those need a Giphy key and a browser; this needs neither).
 on:
   workflow_dispatch:
   workflow_call:
+
+defaults:
+  run:
+    working-directory: PlanningPoker
 
 jobs:
   measure:
@@ -20,7 +24,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          global-json-file: PlanningPoker/global.json
 
       - name: Build
         run: dotnet build PlanningPoker.slnx -c Release
@@ -37,12 +41,12 @@ jobs:
         env:
           ASPNETCORE_URLS: http://localhost:6232
         run: |
-          # ContentRootPath defaults to the process's working directory (the repo root here), not
-          # the published DLL's own folder, so WebRootPath resolves to <repo root>/wwwroot (doesn't
+          # ContentRootPath defaults to the process's working directory (this project's folder here), not
+          # the published DLL's own folder, so WebRootPath resolves to <project folder>/wwwroot (doesn't
           # exist) unless --contentRoot is given explicitly. It must be absolute: a relative value
           # gets resolved against the DLL's base directory, not this shell's cwd, and silently
           # doubles the path (confirmed locally: publish/api/publish/api).
-          dotnet publish/api/PlanningPoker.Api.dll --contentRoot "$GITHUB_WORKSPACE/publish/api" > api.log 2>&1 &
+          dotnet publish/api/PlanningPoker.Api.dll --contentRoot "$GITHUB_WORKSPACE/PlanningPoker/publish/api" > api.log 2>&1 &
           echo $! > api.pid
           timeout 30 bash -c 'until curl -sf http://localhost:6232/healthz >/dev/null; do sleep 1; done'
 

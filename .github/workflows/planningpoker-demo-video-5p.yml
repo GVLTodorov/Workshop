@@ -1,13 +1,16 @@
-name: Demo Video (12 Players)
+name: PlanningPoker Demo Video (5 Players)
 
-# Manual only: this drives 12 real browsers against a live instance and needs a real Giphy API key
+# Manual only: this drives 5 real browsers against a live instance and needs a real Giphy API key
 # (GIPHY_API_BASE_URL/GIPHY_API_QUERY secrets) to show real gifs, so it isn't cheap or safe to run
-# on every push/PR the way ci.yml's jobs are. Trigger it on-demand from the Actions tab whenever
-# the UI changes enough to be worth a fresh demo. Kept as a separate workflow from demo-video-5p.yml
-# (rather than a matrix job in it) so the two can be triggered and re-run independently.
+# on every push/PR the way planningpoker-ci.yml's jobs are. Trigger it on-demand from the Actions tab whenever
+# the UI changes enough to be worth a fresh demo.
 on:
   workflow_dispatch:
   workflow_call:
+
+defaults:
+  run:
+    working-directory: PlanningPoker
 
 jobs:
   record:
@@ -21,7 +24,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v6
         with:
-          global-json-file: global.json
+          global-json-file: PlanningPoker/global.json
 
       - name: Build
         run: dotnet build PlanningPoker.slnx -c Release
@@ -35,7 +38,7 @@ jobs:
         run: dotnet publish src/PlanningPoker.Api/PlanningPoker.Api.csproj -c Release -o publish/api
 
       - name: Install Playwright's Chromium
-        run: pwsh src/PlanningPoker.Tests.Play.Twelve/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+        run: pwsh src/PlanningPoker.Tests.Play/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
 
       - name: Start the app
         env:
@@ -43,22 +46,22 @@ jobs:
           GIPHY_API_BASE_URL: ${{ secrets.GIPHY_API_BASE_URL }}
           GIPHY_API_QUERY: ${{ secrets.GIPHY_API_QUERY }}
         run: |
-          # ContentRootPath defaults to the process's working directory (the repo root here), not
-          # the published DLL's own folder, so WebRootPath resolves to <repo root>/wwwroot (doesn't
+          # ContentRootPath defaults to the process's working directory (this project's folder here), not
+          # the published DLL's own folder, so WebRootPath resolves to <project folder>/wwwroot (doesn't
           # exist) unless --contentRoot is given explicitly. It must be absolute: a relative value
           # gets resolved against the DLL's base directory, not this shell's cwd, and silently
           # doubles the path (confirmed locally: publish/api/publish/api).
-          dotnet publish/api/PlanningPoker.Api.dll --contentRoot "$GITHUB_WORKSPACE/publish/api" > api.log 2>&1 &
+          dotnet publish/api/PlanningPoker.Api.dll --contentRoot "$GITHUB_WORKSPACE/PlanningPoker/publish/api" > api.log 2>&1 &
           echo $! > api.pid
           timeout 30 bash -c 'until curl -sf http://localhost:6232/healthz >/dev/null; do sleep 1; done'
 
       - name: Record demo
         id: record
         run: |
-          mkdir -p artifacts/demo-video-twelve
-          dotnet run --project src/PlanningPoker.Tests.Play.Twelve -c Release --no-build -- \
-            http://localhost:6232 artifacts/demo-video-twelve | tee artifacts/demo-video-twelve.log
-          video_path=$(grep -oP '(?<=^VIDEO_PATH=).+' artifacts/demo-video-twelve.log)
+          mkdir -p artifacts/demo-video
+          dotnet run --project src/PlanningPoker.Tests.Play -c Release --no-build -- \
+            http://localhost:6232 artifacts/demo-video | tee artifacts/demo-video.log
+          video_path=$(grep -oP '(?<=^VIDEO_PATH=).+' artifacts/demo-video.log)
           echo "webm_path=$video_path" >> "$GITHUB_OUTPUT"
 
       - name: Show app server log
@@ -83,17 +86,17 @@ jobs:
           mkdir -p docs
           ffmpeg -y -i "${{ steps.record.outputs.webm_path }}" \
             -vf "fps=14,scale=1100:-1:flags=lanczos,split[s0][s1];[s0]palettegen=stats_mode=diff[p];[s1][p]paletteuse=dither=none" \
-            docs/twelve.gif
+            docs/demo.gif
 
       - name: Commit updated demo GIF
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/twelve.gif
+          git add docs/demo.gif
           if git diff --cached --quiet; then
             echo "Demo GIF unchanged, nothing to commit."
           else
-            git commit -m "chore: refresh twelve-player demo gif"
+            git commit -m "chore: refresh demo gif"
             # `main` may have moved since this job's checkout (e.g. another job in the same Demo
             # All orchestrator run already pushed) -- rebase onto whatever's actually there before
             # pushing. Safe here: this job only ever touches its own generated file.

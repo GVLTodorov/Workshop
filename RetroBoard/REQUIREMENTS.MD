@@ -9,7 +9,7 @@ matters most, similar notes get grouped, and the top items become tracked action
 live, over a real-time connection, no sign-up required.
 
 Architecture and conventions are patterned directly after
-[GVLTodorov/PlanningPoker](https://github.com/GVLTodorov/PlanningPoker), a sibling project by the
+[PlanningPoker](../PlanningPoker), a sibling project by the
 same author solving the same class of problem (a small, real-time, self-hosted agile-ceremony
 tool). Reuse its decisions below rather than re-deriving them from scratch; deviate only where the
 retro domain genuinely differs from planning-poker's (columns/cards/votes instead of
@@ -21,7 +21,7 @@ decks/picks/reveal).
 language (C#) end-to-end, no separate JS/npm toolchain — the API serves the Blazor WASM build as
 static files and exposes real-time board state over SignalR.
 
-- The solution (`.sln`/`.slnx`) file lives at the root level of the repository; every project
+- The solution (`.sln`/`.slnx`) file lives at the root of this project's folder; every project
   (`.csproj`) lives under `src/`, one folder per project, split along dependency lines (mirror
   PlanningPoker's `Infrastructure` / `Api` / `Client` / `Tests.*` split).
 
@@ -36,11 +36,15 @@ static files and exposes real-time board state over SignalR.
 ## 3. DevOps / CI-CD
 
 - Produce a versioned Docker image, following the same CI pattern used in
-  [GVLTodorov/PlanningPoker](https://github.com/GVLTodorov/PlanningPoker) and
+  [PlanningPoker](../PlanningPoker) and
   [GVLTodorov/Resume](https://github.com/GVLTodorov/Resume) (tests gate a version bump, which
   gates the image build/push).
 - The pipeline must run the full test suite (see [Section 8](#8-testing-strategy)) before
   building/publishing the image.
+- Lives in the [Workshop](../README.md) monorepo: [retroboard-ci.yml](../.github/workflows/retroboard-ci.yml)
+  runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `RetroBoard/`
+  or those two workflow files change. Versions are independent `RetroBoard-vX.Y.Z` git tags; the
+  image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus `latest` on `main`.
 
 ## 4. Deployment
 
@@ -135,7 +139,7 @@ static files and exposes real-time board state over SignalR.
 
 The identity a participant picked on the create/join screen (name) is mirrored into
 `sessionStorage`, not just kept in memory — same rationale and scoping as PlanningPoker's
-[5.6](https://github.com/GVLTodorov/PlanningPoker/blob/main/REQUIREMENTS.MD#56-session-persistence-across-a-page-refresh):
+[5.6](../PlanningPoker/REQUIREMENTS.MD#56-session-persistence-across-a-page-refresh):
 survives an in-tab refresh, doesn't linger across unrelated future visits.
 
 ### 5.6a Rejoin after a transport-level reconnect (no page refresh)
@@ -148,7 +152,7 @@ no entry for it. The client detects this (`BoardHubClient.Reconnected`) and re-i
 with the same participant id to reclaim server-side tracking and refresh board state, so subsequent
 actions (add card, vote, etc.) keep working instead of failing with "Not connected to a board." —
 same rationale as PlanningPoker's
-[5.6a](https://github.com/GVLTodorov/PlanningPoker/blob/main/REQUIREMENTS.MD#56a-rejoin-after-a-transport-level-reconnect-no-page-refresh).
+[5.6a](../PlanningPoker/REQUIREMENTS.MD#56a-rejoin-after-a-transport-level-reconnect-no-page-refresh).
 
 ### 5.7 Export
 
@@ -161,7 +165,7 @@ candidate for future work.
 - Primary palette: calm blue/violet (final shade TBD during implementation — keep it distinct
   from PlanningPoker's green so the two apps don't look like reskins of each other).
 - Larger-than-default UI: bigger fonts, buttons, and touch targets; generous spacing —
-  accessibility-minded, same philosophy as PlanningPoker's [Section 7](https://github.com/GVLTodorov/PlanningPoker/blob/main/REQUIREMENTS.MD#7-visual-design).
+  accessibility-minded, same philosophy as PlanningPoker's [Section 7](../PlanningPoker/REQUIREMENTS.MD#7-visual-design).
 
 ## 7. Documentation & Branding
 
@@ -174,7 +178,7 @@ candidate for future work.
 
 `wwwroot/index.html` carries a full metadata layer for the public-facing deployment, not just a
 bare `<title>` — same posture as PlanningPoker's
-[Section 9.1](https://github.com/GVLTodorov/PlanningPoker/blob/main/REQUIREMENTS.MD#91-seo--social-metadata):
+[Section 9.1](../PlanningPoker/REQUIREMENTS.MD#91-seo--social-metadata):
 
 - A descriptive `<title>` and `<meta name="description">`/`keywords` targeting
   sprint-retrospective search terms, plus `<link rel="canonical">` pointing at the live deployment
@@ -217,19 +221,19 @@ bare `<title>` — same posture as PlanningPoker's
   `TimeoutException` instead of silently producing a broken demo. RetroBoard has no Giphy/avatar
   step to drive, unlike PlanningPoker's equivalent tool. Not gated in CI (same non-gating
   treatment as [Section 9](#9-performance)'s load test); triggered manually via the
-  [Demo Video workflow](.github/workflows/demo-video-5p.yml), which commits the regenerated
+  [Demo Video workflow](../.github/workflows/retroboard-demo-video-5p.yml), which commits the regenerated
   `docs/demo.gif`. `RetroBoard.Tests.Play.Twelve` — same `Tests.Play.Twelve`-style tooling
   PlanningPoker built — runs the identical flow scaled to 1 facilitator + 11 guests, reusing
   `RetroBoard.Tests.Play`'s `RetroBoardPlayer` via a project reference rather than duplicating it,
   to show the board holding a full-size retro; triggered manually via the
-  [Demo Video (12 Participants) workflow](.github/workflows/demo-video-12p.yml), which commits
+  [Demo Video (12 Participants) workflow](../.github/workflows/retroboard-demo-video-12p.yml), which commits
   `docs/twelve.gif`.
 
 ## 9. Performance
 
 Apply the relevant .NET/Blazor best practices by construction, then measure with real
 benchmarks/load tests — same posture as PlanningPoker's
-[Section 10](https://github.com/GVLTodorov/PlanningPoker/blob/main/REQUIREMENTS.MD#10-performance).
+[Section 10](../PlanningPoker/REQUIREMENTS.MD#10-performance).
 
 - Async end-to-end; no sync-over-async on the request/broadcast path.
 - `System.Text.Json` source-generated (de)serializers for the SignalR message envelope — the
@@ -266,7 +270,7 @@ benchmarks/load tests — same posture as PlanningPoker's
   reduce the scale being tested. Not gated into CI's `test` job; triggered manually (100 boards x 5
   participants x 3 cards by default — 100 concurrent retros of a realistic size, configurable via
   the workflow's `workflow_dispatch`/`workflow_call` inputs) via the
-  [Demo Load workflow](.github/workflows/demo-load-100p.yml), which also commits the refreshed
+  [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml), which also commits the refreshed
   chart to `docs/load-resource-usage.svg` (embedded in the README's Performance section). A 100 x
   100 (10,000-connection) run was also tried, on a standard GitHub-hosted runner (2 CPU / 7 GB
   RAM): it ran for about 20 minutes before hitting a plain "Connection reset by peer" with no
@@ -274,7 +278,7 @@ benchmarks/load tests — same posture as PlanningPoker's
   some resource under that many real concurrent connections rather than an app bug. `set -o
   pipefail` in the workflow ensures a crash like that surfaces as a genuine failed run rather than
   a false green.
-- The [Demo All workflow](.github/workflows/demo-all.yml) chains the Demo Load and both Demo Video
+- The [Demo All workflow](../.github/workflows/retroboard-demo-all.yml) chains the Demo Load and both Demo Video
   workflows into one manual run (load, then the 12-participant video, then the 5-participant one —
   heaviest/most-likely-to-catch-a-regression first, same ordering rationale as PlanningPoker's) —
   same `demo-all.yml`-style orchestrator PlanningPoker built, using `workflow_call` on each (so

@@ -5,7 +5,7 @@
 
   <em>Real-time, self-hosted Planning Poker for agile estimation.</em>
 
-  [![CI](https://github.com/GVLTodorov/PlanningPoker/actions/workflows/ci.yml/badge.svg)](https://github.com/GVLTodorov/PlanningPoker/actions/workflows/ci.yml)
+  [![CI](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker-ci.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker-ci.yml)
   ![Line coverage](badges/line_coverage.svg)
   ![Branch coverage](badges/branch_coverage.svg)
 
@@ -86,7 +86,7 @@ metadata, and the Giphy avatar proxy.
 
 ## Project structure
 
-The solution ([PlanningPoker.slnx](PlanningPoker.slnx)) sits at the repo root; every project lives
+The solution ([PlanningPoker.slnx](PlanningPoker.slnx)) sits at the root of this folder; every project lives
 under `src/`, one folder per project, split along dependency lines:
 
 ```
@@ -120,7 +120,7 @@ the server).
 dotnet test PlanningPoker.slnx
 ```
 
-Runs the unit, component, and integration suites together. The [CI workflow](.github/workflows/ci.yml)
+Runs the unit, component, and integration suites together. The [CI workflow](../.github/workflows/planningpoker-ci.yml)
 runs the same command on every push/PR and gates the version-bump/image-build/push job on it
 passing. It also collects code coverage and publishes an HTML report (the `coverage-report`
 artifact) plus a summary in the job summary — informational only, not gated on a threshold.
@@ -130,13 +130,13 @@ size check in CI) are run separately and don't gate every commit — see REQUIRE
 The demo video above is produced by `PlanningPoker.Tests.Play`, a Playwright-driven browser
 simulation (5 players join, vote, reveal, reset, and vote again). It's not part of `dotnet test` —
 run it manually against a live instance (`dotnet run --project PlanningPoker.Tests.Play -- http://localhost:6232`),
-or trigger the [Demo Video workflow](.github/workflows/demo-video-5p.yml) from the Actions tab to
+or trigger the [Demo Video workflow](../.github/workflows/planningpoker-demo-video-5p.yml) from the Actions tab to
 regenerate and commit `docs/demo.gif`. That workflow needs `GIPHY_API_BASE_URL`/`GIPHY_API_QUERY`
 configured as repo secrets to show real gifs. The same pattern, scaled to 12 players, is the
-[Demo Video (12 Players) workflow](.github/workflows/demo-video-12p.yml), producing
+[Demo Video (12 Players) workflow](../.github/workflows/planningpoker-demo-video-12p.yml), producing
 `docs/twelve.gif`. All three demo workflows (this one, the 12-player one, and the load test below)
 can also be run back-to-back in a single Actions run via the
-[Demo All (Sequential) workflow](.github/workflows/demo-all.yml), which calls each as a reusable
+[Demo All (Sequential) workflow](../.github/workflows/planningpoker-demo-all.yml), which calls each as a reusable
 workflow chained with `needs:` so they run one at a time. Each job's own checkout is still pinned to
 the SHA the overall run started from, though, so an earlier job's push isn't visible yet by the time
 a later job commits — every job's commit step runs `git pull --rebase origin main` right before
@@ -151,7 +151,7 @@ browsers) voting at a human pace — each room's pick/reveal/reset round takes 1
 seconds, with picks landing at random moments rather than all at once — while sampling
 `PlanningPoker.Api`'s own CPU% and working-set memory. It exists purely to see what the app costs
 under sustained concurrent load. Trigger the
-[Demo Load workflow](.github/workflows/demo-load-100p.yml) from the Actions tab to regenerate and
+[Demo Load workflow](../.github/workflows/planningpoker-demo-load-100p.yml) from the Actions tab to regenerate and
 commit the chart above, or run it manually against a live instance:
 
 ```bash
@@ -185,7 +185,7 @@ Never commit a real Giphy API key — set it only as an environment variable at 
 
 ### Running it with Docker Compose
 
-[docker-compose.yml](docker-compose.yml) at the repo root is the minimal, portable example — build
+[docker-compose.yml](docker-compose.yml) in this folder is the minimal, portable example — build
 locally, no reverse proxy required:
 
 ```yaml

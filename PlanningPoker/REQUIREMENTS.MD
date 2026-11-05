@@ -21,7 +21,7 @@ container image. One language (C#) end-to-end, no separate JS/npm toolchain —
 the API serves the Blazor WASM build as static files and exposes real-time
 game state over SignalR or raw WebSockets.
 
-- The solution (`.sln`) file lives at the root level of the repository; every
+- The solution (`.sln`) file lives at the root of this project's folder; every
   project (`.csproj`) lives under `src/`, one folder per project, split
   along dependency lines.
 
@@ -37,6 +37,10 @@ game state over SignalR or raw WebSockets.
   version bump, which gates the image build/push).
 - The pipeline must run the test suite (see [Section 8](#8-testing-strategy))
   before building/publishing the image.
+- Lives in the [Workshop](../README.md) monorepo: [planningpoker-ci.yml](../.github/workflows/planningpoker-ci.yml)
+  runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `PlanningPoker/`
+  or those two workflow files change. Versions are independent `PlanningPoker-vX.Y.Z` git tags; the
+  image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus `latest` on `main`.
 
 ## 4. Deployment
 
@@ -388,12 +392,12 @@ has no way to show avatars at all.
   instead of silently producing a broken demo. Not gated in CI (same
   non-gating treatment as [Section 10.3](#103-performance--load-testing));
   triggered manually via the
-  [Demo Video](.github/workflows/demo-video-5p.yml) /
-  [Demo Video (12 Players)](.github/workflows/demo-video-12p.yml)
+  [Demo Video](../.github/workflows/planningpoker-demo-video-5p.yml) /
+  [Demo Video (12 Players)](../.github/workflows/planningpoker-demo-video-12p.yml)
   workflows, which commit the regenerated `docs/demo.gif` /
   `docs/twelve.gif`. Each also declares `workflow_call:` (alongside its own
   `workflow_dispatch:`) so the
-  [Demo All (Sequential) workflow](.github/workflows/demo-all.yml) can run
+  [Demo All (Sequential) workflow](../.github/workflows/planningpoker-demo-all.yml) can run
   all three demo workflows (these two plus the load test in
   [Section 10.3](#103-performance--load-testing)) back-to-back in one
   Actions run, chained with `needs:` so they run one at a time. Each job's
@@ -512,7 +516,7 @@ measure them with real benchmarks/load tests.
     round takes 15-20 wall-clock seconds, picks staggered rather than
     simultaneous) while sampling `PlanningPoker.Api`'s own CPU% and
     working-set memory and rendering the series as an SVG chart. Triggered
-    manually via the [Demo Load workflow](.github/workflows/demo-load-100p.yml),
+    manually via the [Demo Load workflow](../.github/workflows/planningpoker-demo-load-100p.yml),
     which commits the refreshed chart to `docs/hundred-resource-usage.svg`
     (embedded in the README's Performance section).
 - Track the published Blazor WASM bundle size and flag/fail on regressions
