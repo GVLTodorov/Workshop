@@ -30,6 +30,10 @@ runs both, independently:
 Pull requests run the build, tests, and performance checks but publish nothing. To publish from a
 GitHub release, name its tag after the project, for example `RetroBoard-v1.2.3`.
 
+To release by hand, open the project's CI workflow in the Actions tab, choose **Run workflow**, and
+pick `main` or `beta`. It runs the same steps, and bumps the version even if nothing has changed
+since the last release. On any other branch it runs the build and tests but publishes nothing.
+
 | Workflow | Purpose |
 | --- | --- |
 | [`dotnet-ci.yml`](.github/workflows/dotnet-ci.yml) | Shared pipeline; a change here rebuilds both projects |

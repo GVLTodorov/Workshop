@@ -3,6 +3,7 @@ name: PlanningPoker CI
 # Runs only when PlanningPoker or its pipeline changes. Path filters don't apply to `release` events,
 # so the job-level `if` below keeps a RetroBoard-v* release from also building this project.
 on:
+  workflow_dispatch:
   push:
     branches:
       - main

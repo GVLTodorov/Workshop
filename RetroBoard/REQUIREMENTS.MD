@@ -44,7 +44,8 @@ static files and exposes real-time board state over SignalR.
 - Lives in the [Workshop](../README.md) monorepo: [retroboard-ci.yml](../.github/workflows/retroboard-ci.yml)
   runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `RetroBoard/`
   or those two workflow files change. Versions are independent `RetroBoard-vX.Y.Z` git tags; the
-  image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus `latest` on `main`.
+  image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus `latest` on `main`. A release can
+  also be started by hand with **Run workflow** on `retroboard-ci.yml`, on `main` or `beta`.
 
 ## 4. Deployment
 
