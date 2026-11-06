@@ -5,7 +5,7 @@
 
   <em>Real-time, self-hosted sprint retrospective board.</em>
 
-  [![CI](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml)
+  [![CI](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml)
   ![Line coverage](badges/line_coverage.svg)
   ![Branch coverage](badges/branch_coverage.svg)
 
@@ -130,12 +130,12 @@ server-side validation logic.
 dotnet test RetroBoard.slnx
 ```
 
-Runs the unit, component, and integration suites together. The [CI workflow](../.github/workflows/retroboard-ci.yml)
+Runs the unit, component, and integration suites together. The [pipeline](../.github/workflows/retroboard.yml)
 runs the same command on every push/PR and gates the version-bump/image-build/push job on it
 passing. It also collects code coverage and publishes an HTML report (the `coverage-report`
 artifact) plus a summary in the job summary — informational only, not gated on a threshold.
 
-The same CI workflow also runs two non-gating perf jobs on every push/PR: `bundle-size` (checks
+The same pipeline also runs two non-gating perf jobs on every push/PR: `bundle-size` (checks
 the published Blazor WASM bundle's Brotli size against a budget,
 [script](src/RetroBoard.Client/scripts/check-bundle-size.ps1)) and `benchmarks` (BenchmarkDotNet
 over `RetroBoard.Tests.Benchmarks`, results published to the job summary).
@@ -145,20 +145,17 @@ over `RetroBoard.Tests.Benchmarks`, results published to the job summary).
 board grace period (see [REQUIREMENTS.MD Section 5.4.5](REQUIREMENTS.MD#54-card-lifecycle)) — those
 three tests alone take about a minute; everything else in the suite is fast.
 
-Three manual, non-gated tools round out the suite (not run by `dotnet test`, triggered from the
-Actions tab), plus an orchestrator that runs all three back-to-back:
+Three tools round out the suite. They aren't run by `dotnet test`, but by the pipeline's `demos`
+job when you start a release by hand on `main` with **Run workflow** in the Actions tab. They run
+one after another, and each commits its result as soon as it finishes:
 
-- [Demo Video workflow](../.github/workflows/retroboard-demo-video-5p.yml) runs `RetroBoard.Tests.Play`, which
-  drives 5 real headless-Chromium sessions through the actual UI (join → write → reveal → vote →
-  advance to action items → convert) and commits the regenerated `docs/demo.gif`.
-- [Demo Video (12 Participants) workflow](../.github/workflows/retroboard-demo-video-12p.yml) runs the same flow
-  at `RetroBoard.Tests.Play.Twelve`, scaled to 12 participants, and commits `docs/twelve.gif`.
-- [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml) runs `RetroBoard.Tests.LoadTest`
-  (100 boards x 5 participants x 3 cards each by default — configurable via workflow inputs —
-  then an export per board), reports `AddCard`/export latency percentiles to the job summary, and
-  commits the regenerated resource-usage chart (see [Performance](#performance) below).
-- [Demo All workflow](../.github/workflows/retroboard-demo-all.yml) runs the three workflows above sequentially
-  in one Actions run (`needs:`-chained so their commits to `main` don't race).
+- `RetroBoard.Tests.LoadTest` (100 boards x 5 participants x 3 cards each, then an export per
+  board) reports `AddCard`/export latency percentiles to the job summary and commits the
+  regenerated resource-usage chart (see [Performance](#performance) below).
+- `RetroBoard.Tests.Play.Twelve` drives the demo flow below with 12 participants and commits
+  `docs/twelve.gif`.
+- `RetroBoard.Tests.Play` drives 5 real headless-Chromium sessions through the actual UI (join →
+  write → reveal → vote → advance to action items → convert) and commits `docs/demo.gif`.
 
 ## Performance
 
@@ -167,7 +164,7 @@ Actions tab), plus an orchestrator that runs all three back-to-back:
 While `RetroBoard.Tests.LoadTest` drives its boards and participants (see above), it also samples
 `RetroBoard.Api`'s own CPU% and working-set memory at a fixed interval and renders the series as
 an SVG chart — purely to see what the app costs under sustained concurrent load, on top of the
-latency numbers it already reports. Trigger the [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml)
+latency numbers it already reports. Start the [pipeline](../.github/workflows/retroboard.yml) by hand
 from the Actions tab to regenerate and commit the chart above, or run it manually against a live
 instance:
 

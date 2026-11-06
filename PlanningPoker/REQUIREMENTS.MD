@@ -37,11 +37,12 @@ game state over SignalR or raw WebSockets.
   version bump, which gates the image build/push).
 - The pipeline must run the test suite (see [Section 8](#8-testing-strategy))
   before building/publishing the image.
-- Lives in the [Workshop](../README.md) monorepo: [planningpoker-ci.yml](../.github/workflows/planningpoker-ci.yml)
-  runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `PlanningPoker/`
-  or those two workflow files change. Versions are independent `PlanningPoker-vX.Y.Z` git tags; the
-  image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus `latest` on `main`. A release can
-  also be started by hand with **Run workflow** on `planningpoker-ci.yml`, on `main` or `beta`.
+- Lives in the [Workshop](../README.md) monorepo, with one pipeline:
+  [planningpoker.yml](../.github/workflows/planningpoker.yml). A push to `main` or `beta` that changes
+  `PlanningPoker/` or that file runs tests, then publishes the image. Running it by hand from the
+  Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
+  `PlanningPoker-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus
+  `latest` on `main`.
 
 ## 4. Deployment
 
@@ -392,19 +393,11 @@ has no way to show avatars at all.
   a specific element, so a stuck flow fails with a `TimeoutException`
   instead of silently producing a broken demo. Not gated in CI (same
   non-gating treatment as [Section 10.3](#103-performance--load-testing));
-  triggered manually via the
-  [Demo Video](../.github/workflows/planningpoker-demo-video-5p.yml) /
-  [Demo Video (12 Players)](../.github/workflows/planningpoker-demo-video-12p.yml)
-  workflows, which commit the regenerated `docs/demo.gif` /
-  `docs/twelve.gif`. Each also declares `workflow_call:` (alongside its own
-  `workflow_dispatch:`) so the
-  [Demo All (Sequential) workflow](../.github/workflows/planningpoker-demo-all.yml) can run
-  all three demo workflows (these two plus the load test in
-  [Section 10.3](#103-performance--load-testing)) back-to-back in one
-  Actions run, chained with `needs:` so they run one at a time. Each job's
-  checkout is still pinned to the run's starting SHA, so each commit step
-  runs `git pull --rebase origin main` right before `git push` to pick up
-  any earlier job's already-pushed commit.
+  run, with the load test in
+  [Section 10.3](#103-performance--load-testing), by the pipeline's
+  manual-only `demos` job, one after another, which commits the regenerated
+  `docs/demo.gif` / `docs/twelve.gif`. Each commit rebases onto `main`
+  before pushing.
 - See [Section 10](#10-performance) for performance-specific tests.
 
 ## 9. Documentation & Branding
@@ -516,9 +509,8 @@ measure them with real benchmarks/load tests.
     SignalR connections, no browsers) voting at a human pace (each room's
     round takes 15-20 wall-clock seconds, picks staggered rather than
     simultaneous) while sampling `PlanningPoker.Api`'s own CPU% and
-    working-set memory and rendering the series as an SVG chart. Triggered
-    manually via the [Demo Load workflow](../.github/workflows/planningpoker-demo-load-100p.yml),
-    which commits the refreshed chart to `docs/hundred-resource-usage.svg`
+    working-set memory and rendering the series as an SVG chart. Run by the
+    pipeline's manual-only `demos` job, which commits the refreshed chart to `docs/hundred-resource-usage.svg`
     (embedded in the README's Performance section).
 - Track the published Blazor WASM bundle size and flag/fail on regressions
   past a set threshold, since download size is the primary perf metric

@@ -1,0 +1,263 @@
+name: RetroBoard
+
+# The whole RetroBoard pipeline:
+#
+#   Push to main or beta   test, release
+#   Pull request           test (publishes nothing)
+#   Run workflow on main   test, release, demos
+#   Run workflow on beta   test, release
+#
+# Demos are manual only: each run drives real browsers and commits GIFs of 5-10 MB to the repo.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - beta
+    paths:
+      - RetroBoard/**
+      - .github/workflows/retroboard.yml
+  pull_request:
+    paths:
+      - RetroBoard/**
+      - .github/workflows/retroboard.yml
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: RetroBoard
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: RetroBoard/global.json
+
+      - name: Restore
+        run: dotnet restore RetroBoard.slnx
+
+      - name: Build
+        run: dotnet build RetroBoard.slnx --no-restore -c Release /nodeReuse:false
+
+      - name: Test
+        run: >
+          dotnet test RetroBoard.slnx --no-build -c Release
+          --collect:"XPlat Code Coverage" --results-directory ./coverage
+
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@5
+        with:
+          reports: RetroBoard/coverage/**/coverage.cobertura.xml
+          targetdir: RetroBoard/coverage/report
+          reporttypes: Html;MarkdownSummaryGithub;Badges
+
+      - name: Add coverage summary to job summary
+        run: cat ./coverage/report/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: coverage-report
+          path: RetroBoard/coverage/report/
+
+      # Both projects' pipelines can push to main at the same time, and a rejected push here would
+      # fail `test` and block the release, so this rebases and retries.
+      - name: Commit updated coverage badges
+        if: github.ref == 'refs/heads/main'
+        run: |
+          mkdir -p badges
+          cp ./coverage/report/badge_linecoverage.svg badges/line_coverage.svg
+          cp ./coverage/report/badge_branchcoverage.svg badges/branch_coverage.svg
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add badges/*.svg
+          if git diff --cached --quiet; then
+            echo "Coverage badges unchanged, nothing to commit."
+            exit 0
+          fi
+          git commit -m "chore(RetroBoard): update coverage badges [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            git pull --rebase --autostash origin main && git push && exit 0
+            sleep $((attempt * 5))
+          done
+          echo "Could not push coverage badges after 5 attempts." >&2
+          exit 1
+
+  # Tracks the Blazor WASM download size. Deliberately not a requirement for `release`: perf checks
+  # track trends and don't block a commit.
+  bundle-size:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: RetroBoard/global.json
+
+      - name: Check bundle size
+        shell: pwsh
+        run: ./src/RetroBoard.Client/scripts/check-bundle-size.ps1
+
+  # `--job short` trades precision for a runtime that fits a shared CI runner. Not a requirement for
+  # `release`, for the same reason as bundle-size.
+  benchmarks:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: RetroBoard/src/RetroBoard.Tests.Benchmarks
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: RetroBoard/global.json
+
+      - name: Run benchmarks
+        run: dotnet run -c Release -- --filter '*' --job short
+
+      - name: Add report to job summary
+        if: always()
+        run: |
+          for f in BenchmarkDotNet.Artifacts/results/*-report-github.md; do
+            echo "### $(basename "$f" -report-github.md)" >> "$GITHUB_STEP_SUMMARY"
+            cat "$f" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v5
+        with:
+          name: benchmark-results
+          path: RetroBoard/src/RetroBoard.Tests.Benchmarks/BenchmarkDotNet.Artifacts/
+
+  release:
+    needs: test
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # tag_prefix keeps this project on its own version line. fetch_all_tags is needed because the
+      # action otherwise reads only 100 tags, and both projects share this repo's tag list. The bump
+      # level comes from every commit since this project's last tag, including the other project's,
+      # so a `feat:` over there can make this bump minor. With no new commits it bumps patch.
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          tag_prefix: RetroBoard-v
+          fetch_all_tags: true
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/retroboard
+          tags: |
+            type=raw,value=${{ steps.tag_version.outputs.new_version }}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: RetroBoard
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+  # Refreshes the load-test chart and both demo GIFs in docs/. To redo only this part after a
+  # failure, use "Re-run failed jobs": it doesn't release again.
+  demos:
+    needs: release
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      APP_DLL: RetroBoard.Api.dll
+      APP_URL: http://localhost:6233
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: RetroBoard/global.json
+
+      - name: Build
+        run: dotnet build RetroBoard.slnx -c Release /nodeReuse:false
+
+      # `dotnet build`'s output serves static files through a manifest of source-tree paths, so
+      # running its DLL directly 404s on every static asset. `dotnet publish` bundles a real, portable
+      # wwwroot, as the Dockerfile does for the production image.
+      - name: Publish the app
+        run: dotnet publish src/RetroBoard.Api/RetroBoard.Api.csproj -c Release -o publish/api /nodeReuse:false
+
+      - name: Install Chromium and ffmpeg
+        run: |
+          pwsh src/RetroBoard.Tests.Play/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+          sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # 100 boards x 5 participants x 3 cards: 500 real SignalR connections and 1,500 AddCard calls,
+      # then every board exported, sampling the API's CPU and memory throughout. A 100 x 100 run was
+      # also tried on a standard runner (2 CPU, 7 GB RAM): it ran about 20 minutes, then hit
+      # "Connection reset by peer" with no exception in the API log, which reads as the runner running
+      # out of resources rather than an app bug.
+      - name: Run load test
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/demo.sh"
+          start_app
+          dotnet run --project src/RetroBoard.Tests.LoadTest -c Release --no-build -- \
+            "$APP_URL" "$(cat api.pid)" docs/load-resource-usage.svg 100 5 3 | tee load-test.log
+          {
+            echo "### Load test: 100 boards x 5 participants x 3 cards, then export"
+            echo '```'
+            cat load-test.log
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          commit_and_push "chore: refresh load-test resource-usage chart" docs/load-resource-usage.svg
+
+      - name: Record 12-participant demo
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/demo.sh"
+          start_app
+          record_gif RetroBoard.Tests.Play.Twelve docs/twelve.gif
+          commit_and_push "chore: refresh twelve-participant demo gif" docs/twelve.gif
+
+      - name: Record 5-participant demo
+        run: |
+          source "$GITHUB_WORKSPACE/.github/scripts/demo.sh"
+          start_app
+          record_gif RetroBoard.Tests.Play docs/demo.gif
+          commit_and_push "chore: refresh demo gif" docs/demo.gif

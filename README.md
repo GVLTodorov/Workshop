@@ -8,8 +8,8 @@ solution, docs, and Docker image.
 | [RetroBoard](RetroBoard) | Sprint retrospective board | `ghcr.io/gvltodorov/retroboard` | `RetroBoard-vX.Y.Z` |
 | [PlanningPoker](PlanningPoker) | Planning Poker for agile estimation | `ghcr.io/gvltodorov/planningpoker` | `PlanningPoker-vX.Y.Z` |
 
-[![RetroBoard CI](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard-ci.yml)
-[![PlanningPoker CI](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker-ci.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker-ci.yml)
+[![RetroBoard](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml)
+[![PlanningPoker](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker.yml)
 
 ## Working on a project
 
@@ -17,28 +17,23 @@ Open the project's own folder in VS Code (for example `Workshop/RetroBoard`) so 
 config and tasks work. Run `dotnet` and `docker compose` commands from that folder too. Each
 project's README covers the details.
 
-## How images get built
+## How the pipelines work
 
-A push to `main` or `beta` runs the pipeline only for the projects it changed; a change to both
-runs both, independently:
+There are two pipelines, one per project: [`retroboard.yml`](.github/workflows/retroboard.yml) and
+[`planningpoker.yml`](.github/workflows/planningpoker.yml).
 
-1. Build and test the project.
-2. Bump that project's version from the conventional commits since its last tag, and tag it.
-3. Build the project's Dockerfile and push the image, tagged with the version. On `main` it's also
-   tagged `latest`.
-
-Pull requests run the build, tests, and performance checks but publish nothing. To publish from a
-GitHub release, name its tag after the project, for example `RetroBoard-v1.2.3`.
-
-To release by hand, open the project's CI workflow in the Actions tab, choose **Run workflow**, and
-pick `main` or `beta`. It runs the same steps, and bumps the version even if nothing has changed
-since the last release. On any other branch it runs the build and tests but publishes nothing.
-
-| Workflow | Purpose |
+| What you do | What runs |
 | --- | --- |
-| [`dotnet-ci.yml`](.github/workflows/dotnet-ci.yml) | Shared pipeline; a change here rebuilds both projects |
-| [`retroboard-ci.yml`](.github/workflows/retroboard-ci.yml), [`planningpoker-ci.yml`](.github/workflows/planningpoker-ci.yml) | Decide when each project's pipeline runs |
-| `retroboard-demo-*.yml`, `planningpoker-demo-*.yml` | Manual demo recordings and load tests, started from the Actions tab |
+| Push to `main` or `beta` | Tests, then a release, for each project the push changed |
+| Open a pull request | Tests only; nothing is published |
+| **Run workflow** on `main` | Tests, a release, then the load test and demo recordings |
+| **Run workflow** on `beta` | Tests, then a release |
+| **Run workflow** on any other branch | Tests only |
 
-Adding a project means giving it a folder with a `<Name>.slnx`, `src/<Name>.Client`,
-`src/<Name>.Tests.Benchmarks`, and a Dockerfile, plus a copy of one of the `*-ci.yml` callers.
+A release bumps the project's version, tags it, and pushes its Docker image, tagged with the version
+and, on `main`, `latest`. **Run workflow** is in the Actions tab, and it releases even if nothing has
+changed since the last release.
+
+The demo recordings commit refreshed GIFs and charts to the project's `docs/` folder, so they only
+run when started by hand. PlanningPoker's recordings need the `GIPHY_API_BASE_URL` and
+`GIPHY_API_QUERY` repo secrets to show real gifs.

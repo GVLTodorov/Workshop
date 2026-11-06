@@ -41,11 +41,12 @@ static files and exposes real-time board state over SignalR.
   gates the image build/push).
 - The pipeline must run the full test suite (see [Section 8](#8-testing-strategy)) before
   building/publishing the image.
-- Lives in the [Workshop](../README.md) monorepo: [retroboard-ci.yml](../.github/workflows/retroboard-ci.yml)
-  runs the shared [dotnet-ci.yml](../.github/workflows/dotnet-ci.yml) pipeline only when `RetroBoard/`
-  or those two workflow files change. Versions are independent `RetroBoard-vX.Y.Z` git tags; the
-  image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus `latest` on `main`. A release can
-  also be started by hand with **Run workflow** on `retroboard-ci.yml`, on `main` or `beta`.
+- Lives in the [Workshop](../README.md) monorepo, with one pipeline:
+  [retroboard.yml](../.github/workflows/retroboard.yml). A push to `main` or `beta` that changes
+  `RetroBoard/` or that file runs tests, then publishes the image. Running it by hand from the
+  Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
+  `RetroBoard-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus
+  `latest` on `main`.
 
 ## 4. Deployment
 
@@ -221,14 +222,10 @@ bare `<title>` — same posture as PlanningPoker's
   smoke test: every wait targets a specific element, so a stuck flow fails with a
   `TimeoutException` instead of silently producing a broken demo. RetroBoard has no Giphy/avatar
   step to drive, unlike PlanningPoker's equivalent tool. Not gated in CI (same non-gating
-  treatment as [Section 9](#9-performance)'s load test); triggered manually via the
-  [Demo Video workflow](../.github/workflows/retroboard-demo-video-5p.yml), which commits the regenerated
-  `docs/demo.gif`. `RetroBoard.Tests.Play.Twelve` — same `Tests.Play.Twelve`-style tooling
+  treatment as [Section 9](#9-performance)'s load test); run by the pipeline's manual-only `demos` job, which commits the regenerated `docs/demo.gif`. `RetroBoard.Tests.Play.Twelve` — same `Tests.Play.Twelve`-style tooling
   PlanningPoker built — runs the identical flow scaled to 1 facilitator + 11 guests, reusing
   `RetroBoard.Tests.Play`'s `RetroBoardPlayer` via a project reference rather than duplicating it,
-  to show the board holding a full-size retro; triggered manually via the
-  [Demo Video (12 Participants) workflow](../.github/workflows/retroboard-demo-video-12p.yml), which commits
-  `docs/twelve.gif`.
+  to show the board holding a full-size retro; run by the same job, which commits `docs/twelve.gif`.
 
 ## 9. Performance
 
@@ -268,22 +265,16 @@ benchmarks/load tests — same posture as PlanningPoker's
   renders the series as a dependency-free SVG line chart. Board-arrival is throttled client-side (a
   bounded number of boards connect at once) purely to stay under a single test-driver machine's
   ephemeral port ceiling at very large scale (e.g. 100 x 100 = 10,000 connections) — it doesn't
-  reduce the scale being tested. Not gated into CI's `test` job; triggered manually (100 boards x 5
-  participants x 3 cards by default — 100 concurrent retros of a realistic size, configurable via
-  the workflow's `workflow_dispatch`/`workflow_call` inputs) via the
-  [Demo Load workflow](../.github/workflows/retroboard-demo-load-100p.yml), which also commits the refreshed
+  reduce the scale being tested. Not gated into CI's `test` job; run by the pipeline's manual-only `demos` job (100 boards x 5
+  participants x 3 cards — 100 concurrent retros of a realistic size), which also commits the refreshed
   chart to `docs/load-resource-usage.svg` (embedded in the README's Performance section). A 100 x
   100 (10,000-connection) run was also tried, on a standard GitHub-hosted runner (2 CPU / 7 GB
   RAM): it ran for about 20 minutes before hitting a plain "Connection reset by peer" with no
   corresponding exception in the API's own log — reads as the small shared runner running out of
   some resource under that many real concurrent connections rather than an app bug. `set -o
-  pipefail` in the workflow ensures a crash like that surfaces as a genuine failed run rather than
+  pipefail` in the demo script ensures a crash like that surfaces as a genuine failed run rather than
   a false green.
-- The [Demo All workflow](../.github/workflows/retroboard-demo-all.yml) chains the Demo Load and both Demo Video
-  workflows into one manual run (load, then the 12-participant video, then the 5-participant one —
-  heaviest/most-likely-to-catch-a-regression first, same ordering rationale as PlanningPoker's) —
-  same `demo-all.yml`-style orchestrator PlanningPoker built, using `workflow_call` on each (so
-  they still work standalone too) and `needs:` so they run strictly sequentially, since each ends
-  with its own `git push` to `main` and two of those racing would conflict; each still `git pull
-  --rebase origin main` right before its own push to pick up whatever the prior job in the same run
-  already pushed.
+- The `demos` job runs on **Run workflow** on `main`, after the release: load, then the
+  12-participant video, then the 5-participant one — heaviest/most-likely-to-catch-a-regression
+  first, same ordering rationale as PlanningPoker's. Each commits its result as soon as it
+  finishes, rebasing onto `main` before pushing.
