@@ -42,9 +42,10 @@ static files and exposes real-time board state over SignalR.
 - The pipeline must run the full test suite (see [Section 8](#8-testing-strategy)) before
   building/publishing the image.
 - Lives in the [Workshop](../README.md) monorepo, with one pipeline:
-  [retroboard.yml](../.github/workflows/retroboard.yml). A push to `main` or `beta` that changes
+  [retroboard.yml](../.github/workflows/retroboard.yml). A push to `main` that changes
   `RetroBoard/` or that file runs tests, then publishes the image. Running it by hand from the
-  Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
+  Actions tab on `main` does the same and also refreshes the demos; on any other branch it only runs
+  tests. Versions are independent
   `RetroBoard-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/workshop/retroboard`, tagged `X.Y.Z`, plus
   `latest` on `main`.
 

@@ -38,9 +38,10 @@ game state over SignalR or raw WebSockets.
 - The pipeline must run the test suite (see [Section 8](#8-testing-strategy))
   before building/publishing the image.
 - Lives in the [Workshop](../README.md) monorepo, with one pipeline:
-  [planningpoker.yml](../.github/workflows/planningpoker.yml). A push to `main` or `beta` that changes
+  [planningpoker.yml](../.github/workflows/planningpoker.yml). A push to `main` that changes
   `PlanningPoker/` or that file runs tests, then publishes the image. Running it by hand from the
-  Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
+  Actions tab on `main` does the same and also refreshes the demos; on any other branch it only runs
+  tests. Versions are independent
   `PlanningPoker-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/workshop/planningpoker`, tagged `X.Y.Z`, plus
   `latest` on `main`.
 

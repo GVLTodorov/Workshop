@@ -2,10 +2,9 @@ name: PlanningPoker
 
 # The whole PlanningPoker pipeline:
 #
-#   Push to main or beta   test, release
+#   Push to main           test, release
 #   Pull request           test (publishes nothing)
 #   Run workflow on main   test, release, demos
-#   Run workflow on beta   test, release
 #
 # Demos are manual only: each run drives real browsers and commits GIFs of 5-10 MB to the repo.
 on:
@@ -13,7 +12,6 @@ on:
   push:
     branches:
       - main
-      - beta
     paths:
       - PlanningPoker/**
       - .github/workflows/planningpoker.yml
@@ -147,7 +145,7 @@ jobs:
 
   release:
     needs: test
-    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/beta')
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write
