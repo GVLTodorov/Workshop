@@ -45,7 +45,7 @@ static files and exposes real-time board state over SignalR.
   [retroboard.yml](../.github/workflows/retroboard.yml). A push to `main` or `beta` that changes
   `RetroBoard/` or that file runs tests, then publishes the image. Running it by hand from the
   Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
-  `RetroBoard-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/retroboard`, tagged `X.Y.Z`, plus
+  `RetroBoard-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/workshop/retroboard`, tagged `X.Y.Z`, plus
   `latest` on `main`.
 
 ## 4. Deployment

@@ -3,7 +3,7 @@
 # since this app keeps no state on disk (rooms are purely in-memory and vanish once empty).
 services:
   planningpoker:
-    image: ghcr.io/gvltodorov/planningpoker:latest
+    image: ghcr.io/gvltodorov/workshop/planningpoker:latest
     build:
       context: .
       dockerfile: Dockerfile

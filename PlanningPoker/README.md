@@ -185,7 +185,7 @@ locally, no reverse proxy required:
 ```yaml
 services:
   planningpoker:
-    image: ghcr.io/gvltodorov/planningpoker:latest
+    image: ghcr.io/gvltodorov/workshop/planningpoker:latest
     build:
       context: .
       dockerfile: Dockerfile
