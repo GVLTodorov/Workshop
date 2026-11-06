@@ -41,7 +41,7 @@ game state over SignalR or raw WebSockets.
   [planningpoker.yml](../.github/workflows/planningpoker.yml). A push to `main` or `beta` that changes
   `PlanningPoker/` or that file runs tests, then publishes the image. Running it by hand from the
   Actions tab does the same, and on `main` also refreshes the demos. Versions are independent
-  `PlanningPoker-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/planningpoker`, tagged `X.Y.Z`, plus
+  `PlanningPoker-vX.Y.Z` git tags; the image is `ghcr.io/gvltodorov/workshop/planningpoker`, tagged `X.Y.Z`, plus
   `latest` on `main`.
 
 ## 4. Deployment

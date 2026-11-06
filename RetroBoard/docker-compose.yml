@@ -4,7 +4,7 @@
 # featured with zero configuration.
 services:
   retroboard:
-    image: ghcr.io/gvltodorov/retroboard:latest
+    image: ghcr.io/gvltodorov/workshop/retroboard:latest
     build:
       context: .
       dockerfile: Dockerfile

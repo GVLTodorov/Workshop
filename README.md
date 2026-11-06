@@ -5,8 +5,8 @@ solution, docs, and Docker image.
 
 | Project | What it is | Image | Version tags |
 | --- | --- | --- | --- |
-| [RetroBoard](RetroBoard) | Sprint retrospective board | `ghcr.io/gvltodorov/retroboard` | `RetroBoard-vX.Y.Z` |
-| [PlanningPoker](PlanningPoker) | Planning Poker for agile estimation | `ghcr.io/gvltodorov/planningpoker` | `PlanningPoker-vX.Y.Z` |
+| [RetroBoard](RetroBoard) | Sprint retrospective board | `ghcr.io/gvltodorov/workshop/retroboard` | `RetroBoard-vX.Y.Z` |
+| [PlanningPoker](PlanningPoker) | Planning Poker for agile estimation | `ghcr.io/gvltodorov/workshop/planningpoker` | `PlanningPoker-vX.Y.Z` |
 
 [![RetroBoard](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/retroboard.yml)
 [![PlanningPoker](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker.yml/badge.svg)](https://github.com/GVLTodorov/Workshop/actions/workflows/planningpoker.yml)
